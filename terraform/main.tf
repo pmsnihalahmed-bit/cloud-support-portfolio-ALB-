@@ -146,10 +146,10 @@ resource "aws_security_group" "pvt_sg" {
   vpc_id = aws_vpc.main.id
 
   egress {
-    from_port = 0
-    to_port   = 0
-    protocol  = "-1"
-    cidr_blocks      = ["0.0.0.0/0"]
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = { Name = "pvt-sg" }
@@ -162,10 +162,11 @@ resource "aws_instance" "ec2_a" {
   vpc_security_group_ids      = [aws_security_group.pvt_sg.id]
   key_name                    = aws_key_pair.managed_key.key_name
   associate_public_ip_address = false
+  iam_instance_profile        = aws_iam_instance_profile.ec2_ssm_profile.name
 
-  root_block_device  {
-    volume_size            = 10
-    volume_type            = "gp3"
+  root_block_device {
+    volume_size           = 10
+    volume_type           = "gp3"
     delete_on_termination = true
   }
 
@@ -179,13 +180,43 @@ resource "aws_instance" "ec2_b" {
   vpc_security_group_ids      = [aws_security_group.pvt_sg.id]
   key_name                    = aws_key_pair.managed_key.key_name
   associate_public_ip_address = false
+  iam_instance_profile        = aws_iam_instance_profile.ec2_ssm_profile.name
 
-  root_block_device  {
-    volume_size            = 10
-    volume_type            = "gp3"
+  root_block_device {
+    volume_size           = 10
+    volume_type           = "gp3"
     delete_on_termination = true
   }
 
   tags = { Name = "EC2-B" }
 }
 
+resource "aws_iam_role" "ec2_ssm_role" {
+  name = "ec2-ssm-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+  tags = { Name = "ec2-ssm-role" }
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_ssm" {
+  role       = aws_iam_role.ec2_ssm_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "ec2_ssm_profile" {
+  name = "ec2-ssm-profile"
+  role = aws_iam_role.ec2_ssm_role.name
+
+  tags = { Name = "ec2-ssm-profile"
+  }
+}
