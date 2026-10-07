@@ -145,6 +145,12 @@ resource "aws_key_pair" "managed_key" {
 resource "aws_security_group" "pvt_sg" {
   vpc_id = aws_vpc.main.id
 
+  ingress {
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
+  }
   egress {
     from_port   = 0
     to_port     = 0
@@ -219,4 +225,55 @@ resource "aws_iam_instance_profile" "ec2_ssm_profile" {
 
   tags = { Name = "ec2-ssm-profile"
   }
+}
+resource "aws_security_group" "alb_sg" {
+  vpc_id = aws_vpc.main.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "alb-sg" }
+}
+
+resource "aws_lb_target_group" "app_tg" {
+  name        = "App-TG"
+  protocol    = "HTTP"
+  port        = 80
+  target_type = "instance"
+  vpc_id      = aws_vpc.main.id
+
+  health_check {
+    path                = "/health"
+    protocol            = "HTTP"
+    matcher             = "200"
+    interval            = 15
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+
+  tags = { Name = "App-TG" }
+}
+
+resource "aws_lb_target_group_attachment" "ec2_a" {
+  target_group_arn = aws_lb_target_group.app_tg.arn
+  target_id        = aws_instance.ec2_a.id
+  port             = 80
+}
+
+resource "aws_lb_target_group_attachment" "ec2_b" {
+  target_group_arn = aws_lb_target_group.app_tg.arn
+  target_id        = aws_instance.ec2_b.id
+  port             = 80
 }
