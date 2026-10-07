@@ -277,3 +277,26 @@ resource "aws_lb_target_group_attachment" "ec2_b" {
   target_id        = aws_instance.ec2_b.id
   port             = 80
 }
+
+resource "aws_lb" "external_lb" {
+name = "project-2-ALB"
+internal = false
+load_balancer_type = "application"
+
+security_groups = [ aws_security_group.alb_sg.id ]
+
+subnets = [ aws_subnet.public_a.id, aws_subnet.public_b.id ]
+
+tags = { Name = "project-2-alb" }
+}
+
+resource "aws_lb_listener" "front_end" {
+load_balancer_arn = aws_lb.external_lb.arn
+port = 80
+protocol = "HTTP"
+
+default_action {
+type = "forward"
+target_group_arn = aws_lb_target_group.app_tg.arn
+}
+}
