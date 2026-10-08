@@ -196,23 +196,31 @@ resource "aws_instance" "ec2_b" {
 
   tags = { Name = "EC2-B" }
 }
+data "aws_iam_policy_document" "ec2_assume_role" {
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["ec2.amazonaws.com"]
+    }
+
+    actions = [
+      "sts:AssumeRole"
+    ]
+  }
+}
 
 resource "aws_iam_role" "ec2_ssm_role" {
   name = "ec2-ssm-role"
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
 
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "ec2.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
-  tags = { Name = "ec2-ssm-role" }
+  tags = {
+    Name = "ec2-ssm-role"
+  }
 }
+
 
 resource "aws_iam_role_policy_attachment" "ec2_ssm" {
   role       = aws_iam_role.ec2_ssm_role.name
@@ -300,3 +308,56 @@ type = "forward"
 target_group_arn = aws_lb_target_group.app_tg.arn
 }
 }
+data "aws_caller_identity" "current" {}
+
+resource "aws_s3_bucket" "app_storage" {
+  bucket = "app-storage-${data.aws_caller_identity.current.account_id}"
+
+  tags = {
+    Name        = "app-storage"
+    Environment = "project-2"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "app_storage" {
+  bucket = aws_s3_bucket.app_storage.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+data "aws_iam_policy_document" "ec2_s3_access" {
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "s3:ListBucket"
+    ]
+
+    resources = [
+      aws_s3_bucket.app_storage.arn
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject"
+    ]
+
+    resources = [
+      "${aws_s3_bucket.app_storage.arn}/*"
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "ec2_s3_access" {
+  name   = "ec2-s3-app-access"
+  role   = aws_iam_role.ec2_ssm_role.id
+  policy = data.aws_iam_policy_document.ec2_s3_access.json
+}
+
+
